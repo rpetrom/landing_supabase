@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capacitaciones | ENI</title>
+  <meta name="description" content="Consulta las capacitaciones disponibles.">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --verde:#087443; --verde-oscuro:#075b36; --fondo:#f4f7f5; }
+    body { background:var(--fondo); color:#203129; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .navbar { background:var(--verde-oscuro); }
+    .hero { background:linear-gradient(135deg,#075b36,#11945a); color:white; padding:4rem 0 3.5rem; }
+    .hero .eyebrow { letter-spacing:.12em; text-transform:uppercase; font-size:.8rem; font-weight:700; opacity:.85; }
+    .hero h1 { font-weight:800; letter-spacing:-.035em; }
+    .search-wrap { max-width:650px; }
+    .training-card { border:0; border-radius:1rem; box-shadow:0 8px 24px #183d2a12; height:100%; transition:transform .18s ease,box-shadow .18s ease; }
+    .training-card:hover { transform:translateY(-4px); box-shadow:0 14px 30px #183d2a1c; }
+    .card-icon { width:46px;height:46px;display:grid;place-items:center;border-radius:13px;background:#e3f4e9;color:var(--verde);font-size:1.35rem; }
+    .training-card .card-title { font-weight:750; }
+    .training-card .card-text { color:#5e6c64; white-space:pre-line; }
+    .status { color:#627168; }
+    footer { color:#748078; }
+    .spinner-border { width:1.2rem;height:1.2rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container py-2">
+      <a class="navbar-brand fw-bold" href="#"><i class="bi bi-mortarboard-fill me-2"></i>ENI | Capacitaciones</a>
+      <span class="navbar-text text-white-50 small">Oferta de formación</span>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <div class="eyebrow mb-2">Aprender · Crecer · Compartir</div>
+      <h1 class="display-5 mb-3">Encuentra tu próxima capacitación</h1>
+      <p class="lead mb-4" style="max-width:680px">Consulta la oferta de formación y encuentra la capacitación que se ajusta a tus intereses.</p>
+      <div class="input-group input-group-lg search-wrap">
+        <span class="input-group-text bg-white border-0"><i class="bi bi-search"></i></span>
+        <input id="searchInput" class="form-control border-0" type="search" placeholder="Buscar capacitaciones..." aria-label="Buscar capacitaciones">
+      </div>
+    </div>
+  </header>
+
+  <main class="container py-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+      <div>
+        <h2 class="h3 fw-bold mb-1">Capacitaciones disponibles</h2>
+        <p class="status mb-0" id="resultCount">Conectando con la base de datos...</p>
+      </div>
+      <button id="reloadBtn" class="btn btn-outline-success rounded-pill px-3"><i class="bi bi-arrow-clockwise me-1"></i>Actualizar</button>
+    </div>
+
+    <div id="message" class="alert alert-light border" role="status">
+      <span class="spinner-border spinner-border-sm text-success me-2" aria-hidden="true"></span>
+      Consultando Supabase...
+    </div>
+    <div id="cards" class="row g-4"></div>
+  </main>
+
+  <footer class="container pb-4 text-center small">
+    Información de capacitaciones · Datos consultados desde Supabase
+  </footer>
+
+  <script>
+    // Credenciales anon/public de Supabase. Nunca pongas aquí una clave service_role.
+    const SUPABASE_URL = "https://rmrbctrpvugjgvqfsxzl.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtcmJjdHJwdnVnamd2cWZzeHpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0ODcxODAsImV4cCI6MjEwNzA2MzE4MH0.pHOpl3GfhBBw1HCl9zmk8Uzt-qE6Q7ZBCkR9yr9C1ss";
+    const ENDPOINT = `${SUPABASE_URL}/rest/v1/capacitaciones?select=*`;
+
+    const cards = document.getElementById("cards");
+    const message = document.getElementById("message");
+    const resultCount = document.getElementById("resultCount");
+    const searchInput = document.getElementById("searchInput");
+    const reloadBtn = document.getElementById("reloadBtn");
+    let capacitaciones = [];
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+      }[character]));
+    }
+
+    function renderCards(list) {
+      cards.innerHTML = "";
+      resultCount.textContent = `${list.length} ${list.length === 1 ? "capacitación encontrada" : "capacitaciones encontradas"}`;
+
+      if (!list.length) {
+        cards.innerHTML = '<div class="col-12"><div class="alert alert-secondary mb-0">No hay capacitaciones que coincidan con la búsqueda.</div></div>';
+        return;
+      }
+
+      list.forEach((item, index) => {
+        const nombre = item.nombre || `Capacitación ${item.id ?? index + 1}`;
+        const descripcion = item.descripcion || "No hay una descripción disponible.";
+        const col = document.createElement("div");
+        col.className = "col-12 col-md-6 col-xl-4";
+        col.innerHTML = `
+          <article class="card training-card">
+            <div class="card-body p-4">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <span class="card-icon"><i class="bi bi-journal-bookmark-fill"></i></span>
+                <span class="badge rounded-pill text-bg-light">ID: ${escapeHtml(item.id ?? "N/D")}</span>
+              </div>
+              <h3 class="card-title h5 mb-3">${escapeHtml(nombre)}</h3>
+              <p class="card-text mb-0">${escapeHtml(descripcion)}</p>
+            </div>
+          </article>`;
+        cards.appendChild(col);
+      });
+    }
+
+    async function loadCapacitaciones() {
+      reloadBtn.disabled = true;
+      message.className = "alert alert-light border";
+      message.innerHTML = '<span class="spinner-border spinner-border-sm text-success me-2" aria-hidden="true"></span>Consultando Supabase...';
+      message.classList.remove("d-none");
+      cards.innerHTML = "";
+
+      try {
+        const response = await fetch(ENDPOINT, {
+          method: "GET",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Accept": "application/json"
+          }
+        });
+
+        const raw = await response.text();
+        let data;
+        try { data = raw ? JSON.parse(raw) : []; }
+        catch { throw new Error(`La respuesta no es JSON válido (HTTP ${response.status}).`); }
+
+        if (!response.ok) {
+          const detail = data.message || data.details || data.hint || `Error HTTP ${response.status}`;
+          throw new Error(detail);
+        }
+        if (!Array.isArray(data)) throw new Error("Supabase no devolvió una lista de registros.");
+
+        capacitaciones = data;
+        message.classList.add("d-none");
+        filterCards();
+      } catch (error) {
+        console.error("Error al consultar Supabase:", error);
+        message.className = "alert alert-danger";
+        message.innerHTML = `<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>No se pudieron cargar las capacitaciones.</strong><div class="mt-2">${escapeHtml(error.message)}</div><small class="d-block mt-2">Verifica la URL, la clave, la conexión a Internet y que exista una política RLS que permita SELECT.</small>`;
+        resultCount.textContent = "Error de conexión";
+      } finally {
+        reloadBtn.disabled = false;
+      }
+    }
+
+    function filterCards() {
+      const term = searchInput.value.trim().toLocaleLowerCase("es");
+      const filtered = capacitaciones.filter(item =>
+        `${item.nombre ?? ""} ${item.descripcion ?? ""}`.toLocaleLowerCase("es").includes(term)
+      );
+      renderCards(filtered);
+    }
+
+    searchInput.addEventListener("input", filterCards);
+    reloadBtn.addEventListener("click", loadCapacitaciones);
+    loadCapacitaciones();
+  </script>
+</body>
+</html>
